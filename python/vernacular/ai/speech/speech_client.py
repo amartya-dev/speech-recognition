@@ -4,6 +4,7 @@ import time
 from vernacular.ai.speech.proto import speech_to_text_pb2 as sppt_pb
 from vernacular.ai.speech.proto import speech_to_text_pb2_grpc as sppt_grpc_pb
 from vernacular.ai.exceptions import VernacularAPICallError
+from vernacular.ai.speech.types import StreamingRecognitionConfig
 
 
 class SpeechClient(object):
@@ -159,6 +160,16 @@ class SpeechClient(object):
             raise VernacularAPICallError(message=str(e),response=speech_operation)
 
 
+    @staticmethod
+    def generate_stream(requests):
+        for request in requests:
+            if isinstance(request, StreamingRecognitionConfig):
+                request = sppt_pb.StreamingRecognizeRequest(streaming_config=request)
+            else:
+                request = sppt_pb.StreamingRecognizeRequest(audio_content=request)
+            yield request
+
+
     def streaming_recognize(self, requests, timeout=None):
         """
         Performs bidirectional streaming speech recognition: receive results while
@@ -191,5 +202,10 @@ class SpeechClient(object):
             timeout = self.DEFAULT_TIMEOUT
         if len(requests) == 0:
             raise ValueError("no requests found")
-
-        raise NotImplementedError   
+        request_iterator = self.generate_stream(requests)
+        streaming_responses = self.client.StreamingRecognize(
+            request_iterator,
+            metadata=[(self.AUTHORIZATION, self.access_token)]
+        )
+        for response in streaming_responses:
+            print(type(response))
